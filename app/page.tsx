@@ -1,40 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 export default function Home() {
-  const [user, setUser] = useState("");
+  const [session, setSession] = useState<any>(null);
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [msg, setMsg] = useState("");
 
-  function entrar(e: any) {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function entrar(e: any) {
     e.preventDefault();
-    alert("Login recebido: " + user);
+    setMsg("Entrando...");
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: senha,
+    });
+    setMsg(error ? "Login inválido." : "Logado com sucesso!");
+  }
+
+  async function sair() {
+    await supabase.auth.signOut();
+    setMsg("Saiu.");
+  }
+
+  async function baixarDiploma() {
+    setMsg("Buscando diploma...");
+
+    const { data, error } = await supabase
+      .from("diplomas")
+      .select("file_path, full_name")
+      .single();
+
+    if (error || !data) {
+      setMsg("Nenhum diploma encontrado para este usuário.");
+      return;
+    }
+
+    const { data: signed, error: err2 } = await supabase.storage
+      .from("diplomas")
+      .createSignedUrl(data.file_path, 60);
+
+    if (err2) {
+      setMsg("Erro ao gerar link do diploma.");
+      return;
+    }
+
+    window.open(signed.signedUrl, "_blank", "noopener,noreferrer");
+    setMsg(`Abrindo diploma${data.full_name ? " de " + data.full_name : ""}...`);
   }
 
   return (
-    <main style={{fontFamily:"Arial", maxWidth:400, margin:"40px auto"}}>
+    <main style={{ fontFamily: "Arial", maxWidth: 420, margin: "40px auto" }}>
       <h2>Portal de Diplomas</h2>
 
-      <form onSubmit={entrar}>
-        <input
-          placeholder="Número do usuário"
-          value={user}
-          onChange={e => setUser(e.target.value)}
-          style={{width:"100%", padding:10, margin:"8px 0"}}
-        />
+      {!session ? (
+        <form onSubmit={entrar}>
+          <input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ width: "100%", padding: 10, margin: "8px 0" }}
+          />
+          <input
+            placeholder="Senha"
+            type="password"
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            style={{ width: "100%", padding: 10, margin: "8px 0" }}
+          />
+          <button style={{ padding: 10, width: "100%" }}>Entrar</button>
+          <p>{msg}</p>
+        </form>
+      ) : (
+        <>
+          <p>Você está logado ✅</p>
 
-        <input
-          type="password"
-          placeholder="Senha"
-          value={senha}
-          onChange={e => setSenha(e.target.value)}
-          style={{width:"100%", padding:10, margin:"8px 0"}}
-        />
+          <button onClick={baixarDiploma} style={{ padding: 10, width: "100%" }}>
+            Ver / Baixar diploma (PDF)
+          </button>
 
-        <button style={{padding:10, width:"100%"}}>
-          Entrar
-        </button>
-      </form>
+          <button onClick={sair} style={{ padding: 10, width: "100%", marginTop: 10 }}>
+            Sair
+          </button>
+
+          <p>{msg}</p>
+        </>
+      )}
     </main>
   );
 }
