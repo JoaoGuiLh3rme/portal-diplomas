@@ -11,19 +11,23 @@ export default function Home() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
+
     return () => sub.subscription.unsubscribe();
   }, []);
 
   async function entrar(e: any) {
     e.preventDefault();
     setMsg("Entrando...");
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password: senha,
     });
+
     setMsg(error ? "Login inválido." : "Logado com sucesso!");
   }
 
@@ -45,12 +49,17 @@ export default function Home() {
       return;
     }
 
+    // ✅ Corrigido: o bucket no Supabase está como "Diplomas" (D maiúsculo)
     const { data: signed, error: err2 } = await supabase.storage
-      .from("diplomas")
+      .from("Diplomas")
       .createSignedUrl(data.file_path, 60);
 
-    if (err2) {
-      setMsg("Erro ao gerar link do diploma.");
+    if (err2 || !signed?.signedUrl) {
+      setMsg(
+        `Erro ao gerar link do diploma.${
+          err2?.message ? " (" + err2.message + ")" : ""
+        }`
+      );
       return;
     }
 
@@ -98,3 +107,4 @@ export default function Home() {
     </main>
   );
 }
+
